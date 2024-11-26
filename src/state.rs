@@ -4,6 +4,7 @@ use std::{
     collections::VecDeque,
     time::{Duration, SystemTime},
 };
+use time::OffsetDateTime;
 
 const MAX_HISTORY: usize = 100;
 
@@ -104,8 +105,10 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestHistory {
     pub method: String,
-    pub timestamp: SystemTime,
+    pub timestamp: OffsetDateTime,
     pub success: bool,
+    pub url: String,
+    pub params: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -114,6 +117,7 @@ pub enum InputMode {
     Normal,
     Password,
     Command,
+    History,
     CommandBuilder {
         command: String,
         current_param: usize,
@@ -202,7 +206,6 @@ pub struct AppState {
     pub pds_host: String,
     pub is_authenticated: bool,
     pub request_history: VecDeque<RequestHistory>,
-    pub history_index: Option<usize>,
     pub quit: bool,
     pub identifier: Option<String>,
     pub selected_command_index: Option<usize>,
@@ -231,7 +234,6 @@ impl Default for AppState {
             pds_host: "https://bsky.social".to_string(),
             is_authenticated: false,
             request_history: VecDeque::with_capacity(MAX_HISTORY),
-            history_index: None,
             quit: false,
             identifier: None,
             selected_command_index: Some(0),

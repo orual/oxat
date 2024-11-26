@@ -198,51 +198,21 @@ impl App {
                         }
                     }
                     KeyCode::Up => {
-                        if self.state.input.content.is_empty() {
-                            if let Some(idx) = self.state.selected_command_index {
-                                if idx > 0 {
-                                    self.state.selected_command_index = Some(idx - 1);
-                                }
-                            } else {
-                                self.state.selected_command_index =
-                                    Some(AVAILABLE_COMMANDS.len() - 1);
+                        if let Some(idx) = self.state.selected_command_index {
+                            if idx > 0 {
+                                self.state.selected_command_index = Some(idx - 1);
                             }
-                        } else if let Some(idx) = self.state.history_index.map(|i| i + 1) {
-                            if idx < self.state.request_history.len() {
-                                if let Some(hist) = self.state.request_history.get(idx) {
-                                    self.state.input.content = hist.method.clone();
-                                    self.state.input.cursor_position = hist.method.len();
-                                    self.state.history_index = Some(idx);
-                                }
-                            }
-                        } else if !self.state.request_history.is_empty() {
-                            let hist = &self.state.request_history[0];
-                            self.state.input.content = hist.method.clone();
-                            self.state.input.cursor_position = hist.method.len();
-                            self.state.history_index = Some(0);
+                        } else {
+                            self.state.selected_command_index = Some(AVAILABLE_COMMANDS.len() - 1);
                         }
                     }
                     KeyCode::Down => {
-                        if self.state.input.content.is_empty() {
-                            if let Some(idx) = self.state.selected_command_index {
-                                if idx < AVAILABLE_COMMANDS.len() - 1 {
-                                    self.state.selected_command_index = Some(idx + 1);
-                                }
-                            } else {
-                                self.state.selected_command_index = Some(0);
+                        if let Some(idx) = self.state.selected_command_index {
+                            if idx < AVAILABLE_COMMANDS.len() - 1 {
+                                self.state.selected_command_index = Some(idx + 1);
                             }
-                        } else if let Some(idx) = self.state.history_index {
-                            if idx > 0 {
-                                if let Some(hist) = self.state.request_history.get(idx - 1) {
-                                    self.state.input.content = hist.method.clone();
-                                    self.state.input.cursor_position = hist.method.len();
-                                    self.state.history_index = Some(idx - 1);
-                                }
-                            } else {
-                                self.state.input.content.clear();
-                                self.state.input.cursor_position = 0;
-                                self.state.history_index = None;
-                            }
+                        } else {
+                            self.state.selected_command_index = Some(0);
                         }
                     }
                     KeyCode::Tab => {
@@ -257,9 +227,52 @@ impl App {
                             self.state.input.update_completions();
                         }
                     }
+                    KeyCode::Char('h') | KeyCode::Char('H') => {
+                        self.state.input.mode = InputMode::History;
+                        self.state.selected_command_index =
+                            if !self.state.request_history.is_empty() {
+                                Some(0)
+                            } else {
+                                None
+                            };
+                    }
                     _ => {
                         self.state.input.handle_key(key.code);
+                        if !self.state.input.content.is_empty() {
+                            self.state.input.update_completions();
+                        }
                     }
+                },
+                InputMode::History => match key.code {
+                    KeyCode::Enter => {
+                        if let Some(idx) = self.state.selected_command_index {
+                            if let Some(hist) = self.state.request_history.get(idx) {
+                                let method = hist.method.clone();
+                                let params = hist.params.clone();
+                                self.execute_command(&method, &params).await?;
+                                self.state.input.mode = InputMode::ViewingResponse;
+                            }
+                        }
+                    }
+                    KeyCode::Esc => {
+                        self.state.input.mode = InputMode::Command;
+                        self.state.selected_command_index = Some(0);
+                    }
+                    KeyCode::Up => {
+                        if let Some(idx) = self.state.selected_command_index {
+                            if idx > 0 {
+                                self.state.selected_command_index = Some(idx - 1);
+                            }
+                        }
+                    }
+                    KeyCode::Down => {
+                        if let Some(idx) = self.state.selected_command_index {
+                            if idx < self.state.request_history.len() - 1 {
+                                self.state.selected_command_index = Some(idx + 1);
+                            }
+                        }
+                    }
+                    _ => {}
                 },
                 InputMode::CommandBuilder {
                     command,
@@ -507,7 +520,7 @@ impl App {
             }
         }
 
-        self.add_to_history(method);
+        self.add_to_history(method, url.clone(), params.to_vec());
 
         let mut req = self.client.get(&url);
         if let Some(token) = &self.state.auth_token {
@@ -568,11 +581,13 @@ impl App {
         }
     }
 
-    fn add_to_history(&mut self, method: &str) {
+    fn add_to_history(&mut self, method: &str, url: String, params: Vec<String>) {
         self.state.request_history.push_front(RequestHistory {
             method: method.to_string(),
-            timestamp: SystemTime::now(),
+            timestamp: OffsetDateTime::now_utc(),
             success: false,
+            url,
+            params,
         });
 
         if self.state.request_history.len() > MAX_HISTORY {

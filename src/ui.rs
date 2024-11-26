@@ -15,7 +15,7 @@ pub fn render(app: &AppState, f: &mut Frame) {
         .constraints([
             Constraint::Length(3), // Input
             Constraint::Length(3), // Status
-            Constraint::Min(0),    // Main content (commands or output)
+            Constraint::Min(0),    // Main content
             Constraint::Length(1), // Help
         ])
         .split(f.area());
@@ -26,6 +26,9 @@ pub fn render(app: &AppState, f: &mut Frame) {
     match &app.input.mode {
         InputMode::Command => {
             render_commands(app, f, chunks[2]);
+        }
+        InputMode::History => {
+            render_history(app, f, chunks[2]);
         }
         InputMode::CommandBuilder { .. } => {
             render_command_builder(app, f, chunks[2]);
@@ -47,6 +50,7 @@ fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
         InputMode::Command => Style::default().fg(Color::Yellow),
         InputMode::CommandBuilder { .. } => Style::default().fg(Color::Green),
         InputMode::ViewingResponse => Style::default().fg(Color::Blue),
+        InputMode::History => Style::default().fg(Color::Yellow),
         InputMode::Normal => Style::default(),
     };
 
@@ -54,6 +58,7 @@ fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
         InputMode::Password => "Enter your password",
         InputMode::Normal => "Enter your identifier",
         InputMode::Command => "Enter or select a command (Tab to autocomplete)",
+        InputMode::History => "Command History",
         InputMode::CommandBuilder {
             command,
             current_param,
@@ -99,21 +104,23 @@ fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
     f.render_widget(input, area);
 
     // Render autocompletion
-    if let Some(idx) = app.input.completion_index {
-        if let Some(completion) = app.input.completion_matches.get(idx) {
-            let completion_area = Rect {
-                y: area.y + 1,
-                height: 1,
-                ..area
-            };
-            let completion_text = Text::from(vec![Line::from(vec![
-                Span::raw(completion),
-                Span::styled(
-                    format!(" ({}/{})", idx + 1, app.input.completion_matches.len()),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ])]);
-            f.render_widget(Paragraph::new(completion_text), completion_area);
+    if let InputMode::Command = app.input.mode {
+        if let Some(idx) = app.input.completion_index {
+            if let Some(completion) = app.input.completion_matches.get(idx) {
+                let completion_area = Rect {
+                    y: area.y + 1,
+                    height: 1,
+                    ..area
+                };
+                let completion_text = Text::from(vec![Line::from(vec![
+                    Span::raw(completion),
+                    Span::styled(
+                        format!(" ({}/{})", idx + 1, app.input.completion_matches.len()),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ])]);
+                f.render_widget(Paragraph::new(completion_text), completion_area);
+            }
         }
     }
 
@@ -193,6 +200,65 @@ fn render_commands(app: &AppState, f: &mut Frame, area: Rect) {
             lines.push(Line::from(""));
 
             ListItem::new(lines)
+        })
+        .collect();
+
+    let list = List::new(items).block(Block::default()).highlight_style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    f.render_widget(list, inner);
+}
+
+fn render_history(app: &AppState, f: &mut Frame, area: Rect) {
+    let block = Block::default()
+        .title("Command History")
+        .borders(Borders::ALL);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let items: Vec<ListItem> = app
+        .request_history
+        .iter()
+        .enumerate()
+        .map(|(i, hist)| {
+            let style = if Some(i) == app.selected_command_index {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+            } else {
+                Style::default()
+            };
+
+            let time_str = format!(
+                "{:02}:{:02}:{:02}",
+                hist.timestamp.hour(),
+                hist.timestamp.minute(),
+                hist.timestamp.second()
+            );
+
+            let status_style = if hist.success {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::Red)
+            };
+
+            let header_line = Line::from(vec![
+                Span::styled(time_str, Style::default().fg(Color::Gray)),
+                Span::raw(" "),
+                Span::styled(if hist.success { "✓" } else { "✗" }, status_style),
+                Span::raw(" "),
+                Span::styled(&hist.method, style),
+            ]);
+
+            let url_line = Line::from(vec![
+                Span::raw("  "),
+                Span::styled(&hist.url, Style::default().fg(Color::DarkGray)),
+            ]);
+
+            ListItem::new(vec![header_line, url_line])
         })
         .collect();
 
@@ -298,7 +364,10 @@ fn render_help(app: &AppState, f: &mut Frame, area: Rect) {
             "Enter - Submit | Ctrl+c - Quit"
         }
         InputMode::Command => {
-            "Tab - Autocomplete | ↑↓ - Scroll Commands | Enter - Select Command | Ctrl+c - Quit"
+            "Tab - Autocomplete | ↑↓ - Scroll Commands | Enter - Select Command | h - History | Ctrl+c - Quit"
+        }
+        InputMode::History => {
+            "↑↓ - Browse History | Enter - Use Command | Esc - Back | Ctrl+c - Quit"
         }
         InputMode::CommandBuilder { .. } => {
             "Enter - Next Parameter/Submit | Esc - Cancel | Ctrl+c - Quit"

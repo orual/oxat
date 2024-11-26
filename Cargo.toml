@@ -13,4 +13,4 @@ serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.132"
 smol = "2.0.2"
 surf = "2.3.2"
-time = "0.3.36"
+time = { version = "0.3.36", features = ["serde"] }
