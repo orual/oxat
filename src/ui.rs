@@ -294,18 +294,21 @@ fn render_output(app: &AppState, f: &mut Frame, area: Rect) {
 
 fn render_help(app: &AppState, f: &mut Frame, area: Rect) {
     let help_text = match &app.input.mode {
-        InputMode::Normal | InputMode::Password => "Enter - Submit | Ctrl+c - Quit",
+        InputMode::Normal | InputMode::Password => {
+            "Enter - Submit | Ctrl+c - Quit"
+        }
         InputMode::Command => {
             "Tab - Autocomplete | ↑↓ - Scroll Commands | Enter - Select Command | Ctrl+c - Quit"
         }
         InputMode::CommandBuilder { .. } => {
             "Enter - Next Parameter/Submit | Esc - Cancel | Ctrl+c - Quit"
         }
-        InputMode::ViewingResponse => "Enter - Return to Commands | Ctrl+c - Quit",
+        InputMode::ViewingResponse => {
+            "Enter - Return to Commands | c - Copy to Clipboard | e - Export to File | Ctrl+c - Quit"
+        }
     };
 
     let help = Paragraph::new(help_text).style(Style::default().fg(Color::DarkGray));
-
     f.render_widget(help, area);
 }
 

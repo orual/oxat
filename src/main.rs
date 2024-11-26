@@ -7,7 +7,7 @@ use crate::{
     state::{AppState, InputMode, RequestHistory},
     ui::render,
 };
-
+use arboard::Clipboard;
 use crossterm::{
     event::{self, Event as CEvent, KeyCode, KeyEventKind},
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -19,8 +19,13 @@ use miette::{IntoDiagnostic, Result};
 use ratatui::prelude::*;
 use smol::channel::{bounded, Receiver};
 use state::AVAILABLE_COMMANDS;
-use std::time::{Duration, SystemTime};
+use std::{
+    fs::File,
+    io::Write,
+    time::{Duration, SystemTime},
+};
 use surf::Client;
+use time::OffsetDateTime;
 
 const MAX_HISTORY: usize = 100;
 
@@ -313,13 +318,80 @@ impl App {
                         self.state.input.handle_key(key.code);
                     }
                 },
-                InputMode::ViewingResponse => {
-                    if key.code == KeyCode::Enter {
+                InputMode::ViewingResponse => match key.code {
+                    KeyCode::Enter => {
                         self.state.input.content.clear();
                         self.state.input.cursor_position = 0;
                         self.state.input.mode = InputMode::Command;
                     }
-                }
+                    KeyCode::Char('c') => {
+                        if let Some(output) = &self.state.output {
+                            match serde_json::to_string_pretty(output) {
+                                Ok(json_str) => match Clipboard::new() {
+                                    Ok(mut clipboard) => {
+                                        if let Err(e) = clipboard.set_text(json_str) {
+                                            self.state.error =
+                                                Some(format!("Failed to copy to clipboard: {}", e));
+                                            self.state.error_time = Some(SystemTime::now());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        self.state.error =
+                                            Some(format!("Failed to access clipboard: {}", e));
+                                        self.state.error_time = Some(SystemTime::now());
+                                    }
+                                },
+                                Err(e) => {
+                                    self.state.error =
+                                        Some(format!("Failed to format JSON: {}", e));
+                                    self.state.error_time = Some(SystemTime::now());
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('e') => {
+                        if let Some(output) = &self.state.output {
+                            let now = OffsetDateTime::now_utc();
+                            let filename = format!(
+                                "bsky_response_{:04}_{:02}_{:02}_{:02}_{:02}_{:02}.json",
+                                now.year(),
+                                now.month() as u8,
+                                now.day(),
+                                now.hour(),
+                                now.minute(),
+                                now.second()
+                            );
+
+                            match serde_json::to_string_pretty(output) {
+                                Ok(json_str) => match File::create(&filename) {
+                                    Ok(mut file) => match file.write_all(json_str.as_bytes()) {
+                                        Ok(_) => {
+                                            self.state.error =
+                                                Some(format!("Exported to {}", filename));
+                                            self.state.error_time = Some(SystemTime::now());
+                                        }
+                                        Err(e) => {
+                                            self.state.error =
+                                                Some(format!("Failed to write file: {}", e));
+                                            self.state.error_time = Some(SystemTime::now());
+                                        }
+                                    },
+                                    Err(e) => {
+                                        self.state.error =
+                                            Some(format!("Failed to create file: {}", e));
+                                        self.state.error_time = Some(SystemTime::now());
+                                    }
+                                },
+                                Err(e) => {
+                                    self.state.error =
+                                        Some(format!("Failed to format JSON: {}", e));
+                                    self.state.error_time = Some(SystemTime::now());
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                },
             }
         }
         Ok(())
