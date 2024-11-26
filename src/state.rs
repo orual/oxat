@@ -138,14 +138,27 @@ pub struct InputState {
 impl InputState {
     pub fn update_completions(&mut self) {
         if let InputMode::Command = self.mode {
+            if self.content.is_empty() {
+                self.completion_matches.clear();
+                self.completion_index = None;
+                return;
+            }
+
             self.completion_matches = AVAILABLE_COMMANDS
                 .iter()
                 .map(|cmd| cmd.method)
                 .filter(|method| method.starts_with(&self.content))
                 .map(|s| s.to_string())
                 .collect();
+
             self.completion_index = if self.completion_matches.is_empty() {
                 None
+            } else if let Some(idx) = self.completion_index {
+                if idx < self.completion_matches.len() {
+                    Some(idx)
+                } else {
+                    Some(0)
+                }
             } else {
                 Some(0)
             };
@@ -177,16 +190,6 @@ impl InputState {
             KeyCode::Right => {
                 if self.cursor_position < self.content.len() {
                     self.cursor_position += 1;
-                }
-                true
-            }
-            KeyCode::Tab => {
-                if let Some(idx) = self.completion_index {
-                    if let Some(completion) = self.completion_matches.get(idx) {
-                        self.content = completion.clone();
-                        self.cursor_position = self.content.len();
-                        self.completion_index = Some((idx + 1) % self.completion_matches.len());
-                    }
                 }
                 true
             }

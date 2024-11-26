@@ -94,34 +94,54 @@ fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
     let mut text = Text::from(input_content);
     text = text.patch_style(input_style);
 
-    let input = Paragraph::new(text).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(title)
-            .title_style(Style::default().fg(Color::Cyan)),
-    );
+    let input_block = Block::default()
+        .borders(Borders::ALL)
+        .title(title)
+        .title_style(Style::default().fg(Color::Cyan));
 
-    f.render_widget(input, area);
+    f.render_widget(input_block.clone(), area);
+    let inner_area = input_block.inner(area);
+
+    let input = Paragraph::new(text);
+    f.render_widget(input, inner_area);
 
     // Render autocompletion
     if let InputMode::Command = app.input.mode {
-        if let Some(idx) = app.input.completion_index {
-            if let Some(completion) = app.input.completion_matches.get(idx) {
-                let completion_area = Rect {
-                    y: area.y + 1,
-                    height: 1,
-                    ..area
-                };
-                let completion_text = Text::from(vec![Line::from(vec![
-                    Span::raw(completion),
-                    Span::styled(
-                        format!(" ({}/{})", idx + 1, app.input.completion_matches.len()),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ])]);
-                f.render_widget(Paragraph::new(completion_text), completion_area);
+        let mut spans = Vec::new();
+
+        spans.push(Span::styled(app.input.content.clone(), input_style));
+
+        if !app.input.content.is_empty() {
+            if let Some(idx) = app.input.completion_index {
+                if let Some(completion) = app.input.completion_matches.get(idx) {
+                    if let Some(suggestion) = completion.strip_prefix(&app.input.content) {
+                        spans.push(Span::styled(
+                            suggestion,
+                            Style::default().fg(Color::DarkGray),
+                        ));
+
+                        spans.push(Span::styled(
+                            format!(" ({}/{})", idx + 1, app.input.completion_matches.len()),
+                            Style::default().fg(Color::DarkGray),
+                        ));
+                    }
+                }
             }
         }
+
+        let text = Text::from(Line::from(spans));
+        let input = Paragraph::new(text);
+        f.render_widget(input, inner_area);
+    } else {
+        let text = Text::from(if app.input.mode == InputMode::Password {
+            "•".repeat(app.input.content.len())
+        } else {
+            app.input.content.clone()
+        })
+        .patch_style(input_style);
+
+        let input = Paragraph::new(text);
+        f.render_widget(input, inner_area);
     }
 
     f.set_cursor_position(Position {
