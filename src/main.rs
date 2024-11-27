@@ -331,58 +331,95 @@ impl App {
                         self.state.input.handle_key(key.code);
                     }
                 },
-                InputMode::ViewingResponse => match key.code {
-                    KeyCode::Enter => {
-                        self.state.input.content.clear();
-                        self.state.input.cursor_position = 0;
-                        self.state.input.mode = InputMode::Command;
-                    }
-                    KeyCode::Char('c') => {
-                        if let Some(output) = &self.state.output {
-                            match serde_json::to_string_pretty(output) {
-                                Ok(json_str) => match Clipboard::new() {
-                                    Ok(mut clipboard) => {
-                                        if let Err(e) = clipboard.set_text(json_str) {
+                InputMode::ViewingResponse => {
+                    let viewport_height = if let Ok((_, rows)) = crossterm::terminal::size() {
+                        // Subtract 7 for the header (3), status (3), and help (1) areas
+                        rows.saturating_sub(7)
+                    } else {
+                        0
+                    };
+
+                    match key.code {
+                        KeyCode::Enter => {
+                            self.state.input.mode = InputMode::Command;
+                            self.state.input.content.clear();
+                            self.state.input.cursor_position = 0;
+                            self.state.scroll_offset = 0; // Reset scroll position
+                        }
+                        KeyCode::Up => {
+                            self.update_scroll(-1, viewport_height);
+                        }
+                        KeyCode::Down => {
+                            self.update_scroll(1, viewport_height);
+                        }
+                        KeyCode::PageUp => {
+                            self.update_scroll(-10, viewport_height);
+                        }
+                        KeyCode::PageDown => {
+                            self.update_scroll(10, viewport_height);
+                        }
+                        KeyCode::Home => {
+                            self.state.scroll_offset = 0;
+                        }
+                        KeyCode::End => {
+                            let max_scroll =
+                                self.get_content_height().saturating_sub(viewport_height);
+                            self.state.scroll_offset = max_scroll;
+                        }
+                        KeyCode::Char('c') => {
+                            if let Some(output) = &self.state.output {
+                                match serde_json::to_string_pretty(output) {
+                                    Ok(json_str) => match Clipboard::new() {
+                                        Ok(mut clipboard) => {
+                                            if let Err(e) = clipboard.set_text(json_str) {
+                                                self.state.error = Some(format!(
+                                                    "Failed to copy to clipboard: {}",
+                                                    e
+                                                ));
+                                                self.state.error_time = Some(SystemTime::now());
+                                            }
+                                        }
+                                        Err(e) => {
                                             self.state.error =
-                                                Some(format!("Failed to copy to clipboard: {}", e));
+                                                Some(format!("Failed to access clipboard: {}", e));
                                             self.state.error_time = Some(SystemTime::now());
                                         }
-                                    }
+                                    },
                                     Err(e) => {
                                         self.state.error =
-                                            Some(format!("Failed to access clipboard: {}", e));
+                                            Some(format!("Failed to format JSON: {}", e));
                                         self.state.error_time = Some(SystemTime::now());
                                     }
-                                },
-                                Err(e) => {
-                                    self.state.error =
-                                        Some(format!("Failed to format JSON: {}", e));
-                                    self.state.error_time = Some(SystemTime::now());
                                 }
                             }
                         }
-                    }
-                    KeyCode::Char('e') => {
-                        if let Some(output) = &self.state.output {
-                            let now = OffsetDateTime::now_utc();
-                            let filename = format!(
-                                "bsky_response_{:04}_{:02}_{:02}_{:02}_{:02}_{:02}.json",
-                                now.year(),
-                                now.month() as u8,
-                                now.day(),
-                                now.hour(),
-                                now.minute(),
-                                now.second()
-                            );
+                        KeyCode::Char('e') => {
+                            if let Some(output) = &self.state.output {
+                                let now = OffsetDateTime::now_utc();
+                                let filename = format!(
+                                    "bsky_response_{:04}_{:02}_{:02}_{:02}_{:02}_{:02}.json",
+                                    now.year(),
+                                    now.month() as u8,
+                                    now.day(),
+                                    now.hour(),
+                                    now.minute(),
+                                    now.second()
+                                );
 
-                            match serde_json::to_string_pretty(output) {
-                                Ok(json_str) => match File::create(&filename) {
-                                    Ok(mut file) => match file.write_all(json_str.as_bytes()) {
-                                        Ok(_) => {
-                                            self.state.error =
-                                                Some(format!("Exported to {}", filename));
-                                            self.state.error_time = Some(SystemTime::now());
-                                        }
+                                match serde_json::to_string_pretty(output) {
+                                    Ok(json_str) => match File::create(&filename) {
+                                        Ok(mut file) => match file.write_all(json_str.as_bytes()) {
+                                            Ok(_) => {
+                                                self.state.error =
+                                                    Some(format!("Exported to {}", filename));
+                                                self.state.error_time = Some(SystemTime::now());
+                                            }
+                                            Err(e) => {
+                                                self.state.error =
+                                                    Some(format!("Failed to write file: {}", e));
+                                                self.state.error_time = Some(SystemTime::now());
+                                            }
+                                        },
                                         Err(e) => {
                                             self.state.error =
                                                 Some(format!("Failed to write file: {}", e));
@@ -603,6 +640,44 @@ impl App {
             .find(|h| h.method == method)
         {
             hist.success = success;
+        }
+    }
+
+    fn get_content_height(&self) -> u16 {
+        if let Some(output) = &self.state.output {
+            let formatted = serde_json::to_string_pretty(output).unwrap_or_default();
+            let text = ui::syntax_highlight(&formatted);
+            text.lines.len() as u16
+        } else if self.state.error.is_some() {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn update_scroll(&mut self, direction: i16, viewport_height: u16) {
+        let content_height = self.get_content_height();
+        let max_scroll = content_height.saturating_sub(viewport_height);
+
+        match direction {
+            1 => {
+                // Scroll down
+                self.state.scroll_offset = (self.state.scroll_offset + 1).min(max_scroll);
+            }
+            -1 => {
+                // Scroll up
+                self.state.scroll_offset = self.state.scroll_offset.saturating_sub(1);
+            }
+            10 => {
+                // Page down
+                self.state.scroll_offset =
+                    (self.state.scroll_offset + viewport_height).min(max_scroll);
+            }
+            -10 => {
+                // Page up
+                self.state.scroll_offset = self.state.scroll_offset.saturating_sub(viewport_height);
+            }
+            _ => {}
         }
     }
 

@@ -212,6 +212,7 @@ pub struct AppState {
     pub quit: bool,
     pub identifier: Option<String>,
     pub selected_command_index: Option<usize>,
+    pub scroll_offset: u16,
 }
 
 impl AppState {
@@ -240,6 +241,7 @@ impl Default for AppState {
             quit: false,
             identifier: None,
             selected_command_index: Some(0),
+            scroll_offset: 0,
         }
     }
 }

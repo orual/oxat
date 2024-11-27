@@ -374,7 +374,10 @@ fn render_output(app: &AppState, f: &mut Frame, area: Rect) {
         _ => Text::raw(""),
     };
 
-    let paragraph = Paragraph::new(text).wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(text)
+        .wrap(Wrap { trim: true })
+        .scroll((app.scroll_offset, 0));
+
     f.render_widget(paragraph, inner);
 }
 
@@ -393,7 +396,7 @@ fn render_help(app: &AppState, f: &mut Frame, area: Rect) {
             "Enter - Next Parameter/Submit | Esc - Cancel | Ctrl+c - Quit"
         }
         InputMode::ViewingResponse => {
-            "Enter - Return to Commands | c - Copy to Clipboard | e - Export to File | Ctrl+c - Quit"
+            "↑↓/PgUp/PgDn - Scroll | Home/End - Top/Bottom | Enter - Return to Commands | c - Copy | e - Export | Ctrl+c - Quit"
         }
     };
 
@@ -401,7 +404,7 @@ fn render_help(app: &AppState, f: &mut Frame, area: Rect) {
     f.render_widget(help, area);
 }
 
-fn syntax_highlight(json: &str) -> Text<'static> {
+pub fn syntax_highlight(json: &str) -> Text<'static> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut current_line: Vec<Span<'static>> = Vec::new();
     let mut indent_level = 0;
