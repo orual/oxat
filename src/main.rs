@@ -40,6 +40,7 @@ struct App {
     state: AppState,
     events: Receiver<AppEvent>,
     client: Client,
+    clipboard: Clipboard,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -121,6 +122,7 @@ impl App {
             state: AppState::default(),
             events: rx,
             client,
+            clipboard: Clipboard::new().into_diagnostic()?,
         })
     }
 
@@ -371,22 +373,13 @@ impl App {
                         KeyCode::Char('c') => {
                             if let Some(output) = &self.state.output {
                                 match serde_json::to_string_pretty(output) {
-                                    Ok(json_str) => match Clipboard::new() {
-                                        Ok(mut clipboard) => {
-                                            if let Err(e) = clipboard.set_text(json_str) {
-                                                self.state.error = Some(format!(
-                                                    "Failed to copy to clipboard: {}",
-                                                    e
-                                                ));
-                                                self.state.error_time = Some(SystemTime::now());
-                                            }
-                                        }
-                                        Err(e) => {
+                                    Ok(json_str) => {
+                                        if let Err(e) = self.clipboard.set_text(json_str) {
                                             self.state.error =
-                                                Some(format!("Failed to access clipboard: {}", e));
+                                                Some(format!("Failed to copy to clipboard: {}", e));
                                             self.state.error_time = Some(SystemTime::now());
                                         }
-                                    },
+                                    }
                                     Err(e) => {
                                         self.state.error =
                                             Some(format!("Failed to format JSON: {}", e));
