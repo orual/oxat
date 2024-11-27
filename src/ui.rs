@@ -46,7 +46,7 @@ pub fn render(app: &AppState, f: &mut Frame) {
 
 fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
     let input_style = match app.input.mode {
-        InputMode::Password => Style::default().fg(Color::Red),
+        InputMode::Password => Style::default().fg(Color::default()),
         InputMode::Command => Style::default().fg(Color::Yellow),
         InputMode::CommandBuilder { .. } => Style::default().fg(Color::Green),
         InputMode::ViewingResponse => Style::default().fg(Color::Blue),
@@ -402,55 +402,91 @@ fn render_help(app: &AppState, f: &mut Frame, area: Rect) {
 }
 
 fn syntax_highlight(json: &str) -> Text<'static> {
-    let mut spans = Vec::new();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut current_line: Vec<Span<'static>> = Vec::new();
+    let mut indent_level = 0;
     let mut in_string = false;
     let mut current = String::new();
+
+    const SPACE: &str = "\u{00A0}";
+    const INDENT_SIZE: usize = 4;
+
+    let create_indent = |level: usize| -> String { SPACE.repeat(level * INDENT_SIZE) };
 
     for c in json.chars() {
         match c {
             '"' => {
                 if !current.is_empty() {
-                    spans.push(Span::raw(current.clone()));
+                    current_line.push(Span::raw(current.clone()));
                     current.clear();
                 }
                 in_string = !in_string;
-                spans.push(Span::styled("\"", Style::default().fg(Color::Green)));
+                current_line.push(Span::styled("\"", Style::default().fg(Color::Green)));
             }
-            '{' | '}' | '[' | ']' if !in_string => {
+            '{' | '[' if !in_string => {
                 if !current.is_empty() {
-                    spans.push(Span::raw(current.clone()));
+                    current_line.push(Span::raw(current.clone()));
                     current.clear();
                 }
-                spans.push(Span::styled(
+                current_line.push(Span::styled(
                     c.to_string(),
                     Style::default().fg(Color::Yellow),
                 ));
+                lines.push(Line::from(current_line));
+                indent_level += 1;
+                current_line = vec![Span::raw(create_indent(indent_level))];
+            }
+            '}' | ']' if !in_string => {
+                if !current.is_empty() {
+                    current_line.push(Span::raw(current.clone()));
+                    current.clear();
+                }
+                if current_line.len() > 1 {
+                    lines.push(Line::from(current_line));
+                }
+                indent_level = indent_level.saturating_sub(1);
+                current_line = vec![
+                    Span::raw(create_indent(indent_level)),
+                    Span::styled(c.to_string(), Style::default().fg(Color::Yellow)),
+                ];
             }
             ':' if !in_string => {
                 if !current.is_empty() {
-                    spans.push(Span::raw(current.clone()));
+                    current_line.push(Span::styled(
+                        current.clone(),
+                        Style::default().fg(Color::Blue),
+                    ));
                     current.clear();
                 }
-                spans.push(Span::styled(":", Style::default().fg(Color::Cyan)));
+                current_line.push(Span::styled(": ", Style::default().fg(Color::Cyan)));
             }
             ',' if !in_string => {
                 if !current.is_empty() {
-                    spans.push(Span::raw(current.clone()));
+                    if current.parse::<f64>().is_ok() {
+                        current_line.push(Span::styled(
+                            current.clone(),
+                            Style::default().fg(Color::Magenta),
+                        ));
+                    } else if current == "true" || current == "false" || current == "null" {
+                        current_line.push(Span::styled(
+                            current.clone(),
+                            Style::default().fg(Color::Red),
+                        ));
+                    } else {
+                        current_line.push(Span::raw(current.clone()));
+                    }
                     current.clear();
                 }
-                spans.push(Span::raw(","));
-                spans.push(Span::raw("\n"));
+                current_line.push(Span::raw(","));
+                lines.push(Line::from(current_line));
+                current_line = vec![Span::raw(create_indent(indent_level))];
             }
-            '\n' if !in_string => {
-                if !current.is_empty() {
-                    spans.push(Span::raw(current.clone()));
-                    current.clear();
-                }
-                spans.push(Span::raw("\n"));
+            '\n' | ' ' if !in_string => {
+                continue;
             }
             _ => {
                 if in_string {
-                    spans.push(Span::styled(
+                    current_line.push(Span::styled(
                         c.to_string(),
                         Style::default().fg(Color::Green),
                     ));
@@ -462,8 +498,21 @@ fn syntax_highlight(json: &str) -> Text<'static> {
     }
 
     if !current.is_empty() {
-        spans.push(Span::raw(current));
+        if current.parse::<f64>().is_ok() {
+            current_line.push(Span::styled(
+                current.clone(),
+                Style::default().fg(Color::Magenta),
+            ));
+        } else if current == "true" || current == "false" || current == "null" {
+            current_line.push(Span::styled(current, Style::default().fg(Color::Red)));
+        } else {
+            current_line.push(Span::raw(current));
+        }
     }
 
-    Text::from(Line::from(spans))
+    if !current_line.is_empty() {
+        lines.push(Line::from(current_line));
+    }
+
+    Text::from(lines)
 }
