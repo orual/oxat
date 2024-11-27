@@ -428,20 +428,15 @@ impl App {
                                     },
                                     Err(e) => {
                                         self.state.error =
-                                            Some(format!("Failed to create file: {}", e));
+                                            Some(format!("Failed to format JSON: {}", e));
                                         self.state.error_time = Some(SystemTime::now());
                                     }
-                                },
-                                Err(e) => {
-                                    self.state.error =
-                                        Some(format!("Failed to format JSON: {}", e));
-                                    self.state.error_time = Some(SystemTime::now());
                                 }
                             }
                         }
+                        _ => {}
                     }
-                    _ => {}
-                },
+                }
             }
         }
         Ok(())
