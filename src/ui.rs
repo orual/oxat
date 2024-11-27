@@ -415,7 +415,7 @@ pub fn syntax_highlight(json: &str) -> Text<'static> {
     let mut current = String::new();
 
     const SPACE: &str = "\u{00A0}";
-    const INDENT_SIZE: usize = 4;
+    const INDENT_SIZE: usize = 2;
 
     let create_indent = |level: usize| -> String { SPACE.repeat(level * INDENT_SIZE) };
 

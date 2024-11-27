@@ -43,6 +43,42 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
         ],
     },
     XrpcCommand {
+        method: "com.atproto.identity.resolveHandle",
+        description: "Resolve a handle (domain name) to a DID",
+        parameters: &[
+            Parameter {
+                name: "handle",
+                description: "The handle to resolve",
+                optional: false,
+                default: None,
+            },
+        ],
+    },
+    XrpcCommand {
+        method: "app.bsky.feed.getPostThread",
+        description: "Get a thread of posts by a post URI",
+        parameters: &[
+            Parameter {
+                name: "uri",
+                description: "The URI of the post used as entry point",
+                optional: false,
+                default: None,
+            },
+            Parameter {
+                name: "depth",
+                description: "How many levels of reply depth should be included in the response",
+                optional: true,
+                default: Some("6"),
+            },
+            Parameter {
+                name: "parentHeight",
+                description: "How many levels of parent (and grandparent, etc) post to include",
+                optional: true,
+                default: Some("80"),
+            },
+        ],
+    },
+    XrpcCommand {
         method: "app.bsky.feed.getAuthorFeed",
         description: "Get a feed of posts by an actor",
         parameters: &[
