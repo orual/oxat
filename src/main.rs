@@ -1,12 +1,8 @@
+mod commands;
 mod error;
 mod state;
 mod ui;
 
-use crate::{
-    error::{AppError, AppResult},
-    state::{AppState, InputMode, RequestHistory},
-    ui::render,
-};
 use arboard::Clipboard;
 use crossterm::{
     event::{self, Event as CEvent, KeyCode, KeyEventKind},
@@ -18,7 +14,6 @@ use futures::FutureExt;
 use miette::{IntoDiagnostic, Result};
 use ratatui::prelude::*;
 use smol::channel::{bounded, Receiver};
-use state::AVAILABLE_COMMANDS;
 use std::{
     fs::File,
     io::Write,
@@ -26,6 +21,13 @@ use std::{
 };
 use surf::Client;
 use time::OffsetDateTime;
+
+use crate::{
+    commands::AVAILABLE_COMMANDS,
+    error::{AppError, AppResult},
+    state::{AppState, InputMode, RequestHistory},
+    ui::render,
+};
 
 const MAX_HISTORY: usize = 100;
 

@@ -7,7 +7,10 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{AppState, InputMode, AVAILABLE_COMMANDS};
+use crate::{
+    commands::AVAILABLE_COMMANDS,
+    state::{AppState, InputMode}
+};
 
 pub fn render(app: &AppState, f: &mut Frame) {
     let chunks = Layout::default()
