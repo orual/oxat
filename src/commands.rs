@@ -12,6 +12,7 @@ pub struct XrpcCommand {
     pub description: &'static str,
     pub parameters: &'static [Parameter],
     pub encoding: &'static str,
+    pub needs_service_auth: bool,
 }
 
 pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
@@ -24,7 +25,8 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             optional: false,
             default: None,
         }],
-        encoding: "application/json",   
+        encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "app.bsky.feed.getTimeline",
@@ -44,6 +46,7 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "com.atproto.identity.resolveHandle",
@@ -57,6 +60,7 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "app.bsky.feed.getPostThread",
@@ -82,6 +86,7 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "app.bsky.feed.getAuthorFeed",
@@ -107,6 +112,7 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "app.bsky.graph.getFollowers",
@@ -132,6 +138,7 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "com.atproto.repo.importRepo",
@@ -143,12 +150,14 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             default: None,
         }],
         encoding: "application/vnd.ipld.car",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "com.atproto.server.describeServer",
         description: "Describes the server's account creation requirements and capabilities.",
         parameters: &[],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "app.bsky.graph.getFollowers",
@@ -174,6 +183,7 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
     },
     XrpcCommand {
         method: "com.atproto.sync.listBlobs",
@@ -205,6 +215,52 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "application/json",
+        needs_service_auth: false,
+    },
+    XrpcCommand {
+        method: "com.atproto.server.createAccount",
+        description: "Create an account",
+        parameters: &[
+            Parameter {
+                name: "email",
+                description: "The email address of the account",
+                optional: true,
+                default: None,
+            },
+            Parameter {
+                name: "handle",
+                description: "The handle of the account",
+                optional: false,
+                default: None,
+            },
+            Parameter {
+                name: "did",
+                description: "The DID of the account",
+                optional: true,
+                default: None,
+            },
+            Parameter {
+                name: "password",
+                description: "The password of the account",
+                optional: false,
+                default: None,
+            },
+            Parameter {
+                name: "inviteCode",
+                description: "The invite code of the account",
+                optional: true,
+                default: None,
+            },
+            Parameter {
+                name: "recoveryKey",
+                description: "DID PLC rotation key (aka, recovery key) to be included in PLC creation operation.",
+                optional: true,
+                default: None,
+            },
+
+        ],
+        encoding: "application/json",
+        needs_service_auth: true,
     },
     XrpcCommand {
         method: "com.atproto.sync.getBlob",
@@ -224,5 +280,6 @@ pub const AVAILABLE_COMMANDS: &[XrpcCommand] = &[
             },
         ],
         encoding: "*/*",
+        needs_service_auth: false,
     },
 ];

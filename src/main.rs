@@ -126,6 +126,38 @@ impl App {
         })
     }
 
+    fn custom_pds_host(host: String) -> Result<Self> {
+        let (tx, rx) = bounded(100);
+
+        let event_tx = tx.clone();
+        smol::spawn(async move {
+            loop {
+                if event::poll(Duration::from_millis(100)).unwrap() {
+                    if let Ok(event) = event::read() {
+                        let _ = event_tx.send(AppEvent::Input(event)).await;
+                    }
+                }
+                let _ = event_tx.send(AppEvent::Tick).await;
+            }
+        })
+        .detach();
+
+        let client = surf::Config::new()
+            .set_timeout(Some(Duration::from_secs(10)))
+            .try_into()
+            .into_diagnostic()?;
+
+        Ok(Self {
+            state: AppState {
+                pds_host: format!("https://{}", host),
+                ..Default::default()
+            },
+            events: rx,
+            client,
+            clipboard: Clipboard::new().into_diagnostic()?,
+        })
+    }
+
     async fn handle_input(&mut self, event: CEvent) -> AppResult<()> {
         if let CEvent::Key(key) = event {
             if key.kind != KeyEventKind::Press {
@@ -314,11 +346,18 @@ impl App {
 
                         self.state.input.content.clear();
                         self.state.input.cursor_position = 0;
+                        
 
                         if current_param + 1 < cmd.parameters.len() {
                             self.state.input.mode = InputMode::CommandBuilder {
                                 command,
                                 current_param: current_param + 1,
+                                params: new_params,
+                            };
+                        } else if cmd.needs_service_auth {
+                            self.state.input.mode = InputMode::ServiceAuth {
+                                command,
+                                current_param,
                                 params: new_params,
                             };
                         } else {
@@ -335,6 +374,30 @@ impl App {
                         self.state.input.handle_key(key.code);
                     }
                 },
+                InputMode::ServiceAuth { command, current_param: _, params } => match key.code {
+                    KeyCode::Enter => {
+
+                        let param_value = if self.state.input.content.is_empty() {
+                            return Ok(());
+                        } else {
+                            self.state.input.content.clone()
+                        };
+                        self.state.input.content.clear();
+                        self.state.input.cursor_position = 0;
+                        self.state.service_auth = Some(param_value);
+                        self.execute_command(&command, &params).await?;
+                        self.state.input.mode = InputMode::ViewingResponse;
+                    }
+                    KeyCode::Esc => {
+                        self.state.input.content.clear();
+                        self.state.input.cursor_position = 0;
+                        self.state.input.mode = InputMode::Command;
+                    }
+                    _ => {
+                        self.state.input.handle_key(key.code);
+                    }
+                },
+                
                 InputMode::ViewingResponse => {
                     let viewport_height = if let Ok((_, rows)) = crossterm::terminal::size() {
                         // Subtract 7 for the header (3), status (3), and help (1) areas
@@ -444,6 +507,7 @@ impl App {
             "identifier": identifier,
             "password": password
         });
+        
 
         let endpoint = format!(
             "{}/xrpc/com.atproto.server.createSession",
@@ -559,7 +623,20 @@ impl App {
 
         let mut req = self.client.get(&url);
         if let Some(token) = &self.state.auth_token {
-            req = req.header("Authorization", format!("Bearer {}", token));
+            if cmd.needs_service_auth {
+                if let Some(service_auth) = &self.state.service_auth {
+                    req = req.header("Authorization", format!("Bearer {}", service_auth));
+                } else {
+                    return Err(AppError::Auth {
+                        src: "service auth".into(),
+                        err_span: (0, 0),
+                        msg: "Service auth required but not provided".into(),
+                    }
+                    .into());
+                }
+            } else {
+                req = req.header("Authorization", format!("Bearer {}", token));
+            }
             req = req.header("Content-Type", cmd.encoding);                               
             if let Some(body) = body {
                 req = req.header("Content-Length", body.len().to_string());
@@ -786,9 +863,15 @@ impl App {
 fn main() -> AppResult<()> {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
+    let args: Vec<String> = std::env::args().collect();
 
     let result = smol::block_on(async {
-        let app_result = std::panic::AssertUnwindSafe(App::new()?.run())
+        let app = if args.len() > 1 {
+            App::custom_pds_host(args[1].clone())
+        } else {
+            App::new()
+        };
+        let app_result = std::panic::AssertUnwindSafe(app?.run())
             .catch_unwind()
             .await;
 

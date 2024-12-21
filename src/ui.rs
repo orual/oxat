@@ -52,6 +52,7 @@ fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
         InputMode::Password => Style::default().fg(Color::default()),
         InputMode::Command => Style::default().fg(Color::Yellow),
         InputMode::CommandBuilder { .. } => Style::default().fg(Color::Green),
+        InputMode::ServiceAuth { .. } => Style::default().fg(Color::Green),
         InputMode::ViewingResponse => Style::default().fg(Color::Blue),
         InputMode::History => Style::default().fg(Color::Yellow),
         InputMode::Normal => Style::default(),
@@ -62,6 +63,7 @@ fn render_input(app: &AppState, f: &mut Frame, area: Rect) {
         InputMode::Normal => "Enter your identifier",
         InputMode::Command => "Enter or select a command (Tab to autocomplete)",
         InputMode::History => "Command History",
+        InputMode::ServiceAuth { .. } => "Enter your service auth token for this command",
         InputMode::CommandBuilder {
             command,
             current_param,
@@ -397,6 +399,9 @@ fn render_help(app: &AppState, f: &mut Frame, area: Rect) {
         }
         InputMode::CommandBuilder { .. } => {
             "Enter - Next Parameter/Submit | Esc - Cancel | Ctrl+c - Quit"
+        }
+        InputMode::ServiceAuth { .. } => {
+            "Enter - Submit | Esc - Cancel | Ctrl+c - Quit"
         }
         InputMode::ViewingResponse => {
             "↑↓/PgUp/PgDn - Scroll | Home/End - Top/Bottom | Enter - Return to Commands | c - Copy | e - Export | Ctrl+c - Quit"

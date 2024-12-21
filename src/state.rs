@@ -31,6 +31,11 @@ pub enum InputMode {
         current_param: usize,
         params: Vec<String>,
     },
+    ServiceAuth {
+        command: String,
+        current_param: usize,
+        params: Vec<String>,
+    },
     ViewingResponse,
 }
 
@@ -111,6 +116,7 @@ pub struct AppState {
     pub input: InputState,
     pub auth_token: Option<String>,
     pub refresh_token: Option<String>,
+    pub service_auth: Option<String>,
     pub output: Option<serde_json::Value>,
     pub error: Option<String>,
     pub error_time: Option<SystemTime>,
@@ -150,6 +156,7 @@ impl Default for AppState {
             identifier: None,
             selected_command_index: Some(0),
             scroll_offset: 0,
+            service_auth: None,
         }
     }
 }
