@@ -16,3 +16,4 @@ Cargo.lock
 .direnv
 .envrc
 shell.nix
+*.json

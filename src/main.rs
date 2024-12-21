@@ -529,10 +529,18 @@ impl App {
         );
 
         let mut query_params: Vec<(String, String)> = Vec::new();
+        let mut body: Option<String> = None;
         for (i, param) in cmd.parameters.iter().enumerate() {
             if let Some(value) = params.get(i) {
                 if !value.is_empty() || !param.optional {
-                    query_params.push((param.name.to_string(), value.clone()));
+                    // things which clearly indicate a local file path
+                    // this isn't super robust, but it'll work for the repo upload endpoint
+                    if param.name.is_empty() && (value.starts_with('/') || value.starts_with('~') || value.starts_with('.')) {
+                        let contents: String = smol::fs::read_to_string(value).await.unwrap_or_default();
+                        body = Some(contents);
+                    } else {
+                        query_params.push((param.name.to_string(), value.clone()));
+                    }
                 }
             }
         }
@@ -552,6 +560,11 @@ impl App {
         let mut req = self.client.get(&url);
         if let Some(token) = &self.state.auth_token {
             req = req.header("Authorization", format!("Bearer {}", token));
+            req = req.header("Content-Type", cmd.encoding);                               
+            if let Some(body) = body {
+                req = req.header("Content-Length", body.len().to_string());
+                req = req.body(body);
+            }
         }
 
         match req.send().await {
